@@ -1,6 +1,8 @@
 package main
 
 import (
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -101,4 +103,58 @@ func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Forward the request to the backend
 	backend.ReverseProxy.ServeHTTP(w, r)
+}
+
+func main() {
+	// Parse command line flags
+	port := flag.Int("port", 8080, "Port to serve on")
+	flag.Parse()
+
+	// Configure backends
+	serverList := []string{
+		"http://localhost:8081",
+		"http://localhost:8082",
+		"http://localhost:8083",
+	}
+
+	// Create load balancer
+	lb := LoadBalancer{}
+
+	// Initialize backends
+	for _, serverURL := range serverList {
+		url, err := url.Parse(serverURL)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		proxy := httputil.NewSingleHostReverseProxy(url)
+		proxy.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Error: %v", err)
+			http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		}
+
+		lb.backends = append(lb.backends, &Backend{
+			URL:          url,
+			Alive:        true,
+			ReverseProxy: proxy,
+		})
+		log.Printf("Configured backend: %s", url)
+	}
+
+	// Initial health check
+	lb.HealthCheck()
+
+	// Start periodic health check
+	go lb.HealthCheckPeriodically(time.Minute)
+
+	// Start server
+	server := http.Server{
+		Addr:    fmt.Sprintf(":%d", *port),
+		Handler: &lb,
+	}
+
+	log.Printf("Load Balancer started at :%d\n", *port)
+	if err := server.ListenAndServe(); err != nil {
+		log.Fatal(err)
+	}
 }
