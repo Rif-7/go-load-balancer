@@ -32,7 +32,7 @@ This project implements a lightweight HTTP load balancer in Go using only the st
 3. Start the load balancer:
 
    ```bash
-   go run loadbalancer.go
+   go run load_balancer.go
    ```
 
    The load balancer will listen on port 8080 by default.
@@ -47,7 +47,7 @@ This project implements a lightweight HTTP load balancer in Go using only the st
 
 ## Project Structure
 
-- `loadbalancer.go` – Load balancer logic
+- `load_balancer.go` – Load balancer logic
 - `backend/backend.go` – Simple backend server that returns its port in the response
 
 ## Notes
