@@ -1,10 +1,13 @@
 package main
 
 import (
+	"log"
+	"net"
 	"net/http/httputil"
 	"net/url"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Backend represents a backend server
@@ -38,7 +41,7 @@ type LoadBalancer struct {
 
 // NextBackend returns the next available backend to handle the request
 func (lb *LoadBalancer) NextBackend() *Backend {
-	// Simple round-robin
+	// Round-robin
 	next := atomic.AddUint64(&lb.current, uint64(1)) % uint64(len(lb.backends))
 
 	// Find the next available backend
@@ -49,4 +52,40 @@ func (lb *LoadBalancer) NextBackend() *Backend {
 		}
 	}
 	return nil
+}
+
+// Checks whether a backend is alive by establishing a TCP connection
+func isBackendAlive(u *url.URL) bool {
+	timeout := 2 * time.Second
+	conn, err := net.DialTimeout("tcp", u.Host, timeout)
+	if err != nil {
+		log.Printf("Site unreachable: %s", err)
+		return false
+	}
+	defer conn.Close()
+	return true
+}
+
+// Pings the backends and updates their status
+func (lb *LoadBalancer) HealthCheck() {
+	for _, b := range lb.backends {
+		status := isBackendAlive(b.URL)
+		b.SetAlive(status)
+		if status {
+			log.Printf("Backend %s is alive", b.URL)
+		} else {
+			log.Printf("Backend %s is dead", b.URL)
+		}
+	}
+}
+
+// Runs a routine health check every interval
+func (lb *LoadBalancer) HealthCheckPeriodically(interval time.Duration) {
+	t := time.NewTicker(interval)
+	for {
+		select {
+		case <-t.C:
+			lb.HealthCheck()
+		}
+	}
 }
