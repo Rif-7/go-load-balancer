@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"net"
+	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"sync"
@@ -88,4 +89,16 @@ func (lb *LoadBalancer) HealthCheckPeriodically(interval time.Duration) {
 			lb.HealthCheck()
 		}
 	}
+}
+
+// ServeHTTP implements the http.Handler interface for the LoadBalancer
+func (lb *LoadBalancer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	backend := lb.NextBackend()
+	if backend == nil {
+		http.Error(w, "Service Unavailable", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Forward the request to the backend
+	backend.ReverseProxy.ServeHTTP(w, r)
 }
